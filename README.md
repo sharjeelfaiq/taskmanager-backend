@@ -1,147 +1,255 @@
-# Task Manager — Backend
+# Task Manager Backend
 
-Node.js + Express REST API with MongoDB for the Task Manager application.
+The backend is an Express REST API for task persistence and GitHub profile lookup. It stores tasks in MongoDB through Mongoose, validates task mutations with Joi, applies CORS and request parsing globally, and logs requests and application errors.
 
----
+## Features
+
+- Create, list, update, complete, and delete tasks.
+- Return tasks newest first.
+- Validate task mutation payloads and MongoDB object IDs.
+- Proxy public GitHub user profile requests.
+- Restrict browser origins with configurable CORS rules.
+- Connect to MongoDB lazily when an API request arrives.
+- Produce HTTP request logs and structured application logs.
+- Return JSON responses for API errors and unmatched routes.
+
+## Architecture
+
+Task operations follow a route-controller-service-repository structure. The GitHub module is smaller: its controller calls the external API directly because it has no persistence layer.
+
+```mermaid
+flowchart LR
+    Request[HTTP request] --> Global[Global middleware]
+    Global --> DB[Lazy MongoDB connection]
+    DB --> Router[Express router]
+    Router --> TaskRoutes[Task routes]
+    Router --> GitHubRoute[GitHub route]
+    TaskRoutes --> Validation[Joi validation]
+    Validation --> Controller[Task controller]
+    Controller --> Service[Task service]
+    Service --> Repository[Task repository]
+    Repository --> Mongoose[Mongoose model]
+    Mongoose --> MongoDB[(MongoDB)]
+    GitHubRoute --> GitHubController[GitHub controller]
+    GitHubController --> GitHub[GitHub Users API]
+```
+
+Every route, including the root status route, passes through the database connection middleware before its handler runs.
 
 ## Tech Stack
 
-- **Runtime:** Node.js (ES Modules)
-- **Framework:** Express 4
-- **Database:** MongoDB via Mongoose
-- **Validation:** Joi + envalid
-- **Logging:** Winston
-- **Dev tools:** Nodemon, ESLint, Prettier
+| Area                   | Implementation                                              |
+| ---------------------- | ----------------------------------------------------------- |
+| Runtime                | Node.js with ES modules                                     |
+| Framework              | Express 4                                                   |
+| Language               | JavaScript                                                  |
+| Database               | MongoDB                                                     |
+| Data modeling          | Mongoose 8                                                  |
+| Request validation     | Joi 17                                                      |
+| Environment validation | envalid with dotenv loading                                 |
+| CORS                   | `cors` middleware                                           |
+| HTTP logging           | Morgan                                                      |
+| Application logging    | Winston                                                     |
+| Error creation         | `http-errors`                                               |
+| Development server     | Nodemon                                                     |
+| Testing                | Node.js built-in test runner; no test files currently exist |
+| Formatting and linting | Prettier and ESLint 9                                       |
+| Package manager        | npm (`package-lock.json`)                                   |
 
----
+The implementation has no authentication, authorization, file storage, email delivery, queue, cache, WebSocket, or generated API-documentation subsystem.
 
-## Setup
+## Project Structure
+
+```text
+backend/
+├── src/
+│   ├── api/
+│   │   ├── github/
+│   │   │   ├── github.controller.js
+│   │   │   └── github.routes.js
+│   │   ├── task/
+│   │   │   ├── task.controller.js
+│   │   │   ├── task.dto.js
+│   │   │   ├── task.model.js
+│   │   │   ├── task.repository.js
+│   │   │   ├── task.routes.js
+│   │   │   └── task.service.js
+│   │   └── index.js           # Root router and database connection
+│   ├── config/
+│   │   └── env.config.js      # Validated core environment settings
+│   ├── lib/
+│   │   ├── database.lib.js    # Mongoose connection management
+│   │   ├── logger.lib.js      # Winston logger
+│   │   └── promise.lib.js     # Async middleware wrapper
+│   ├── middlewares/
+│   │   ├── global.middleware.js
+│   │   └── validation.middleware.js
+│   └── app.js                 # Express application entry point
+├── .env.example
+├── nodemon.json
+├── vercel.json
+├── eslint.config.js
+└── package.json
+```
+
+## Installation
+
+Run these commands from the repository root:
 
 ```bash
 cd backend
 npm install
-cp .env.example .env   # fill in your values
-npm run dev
 ```
 
-The server starts at `http://localhost:5000`.
-
----
+Create `.env` from `.env.example` and provide a reachable MongoDB connection string.
 
 ## Environment Variables
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `NODE_ENV` | Environment | `development` |
-| `PORT` | Port to listen on | `5000` |
-| `MONGODB_URI` | MongoDB connection string | `mongodb://localhost:27017/taskmanager` |
-| `FRONTEND_URL` | Allowed CORS origin | `http://localhost:3000` |
-| `BACKEND_URL` | Backend base URL (for logs) | `http://localhost:5000` |
+| Variable          | Required             | Description                                                       | Example                                 |
+| ----------------- | -------------------- | ----------------------------------------------------------------- | --------------------------------------- |
+| `NODE_ENV`        | No                   | `development`, `test`, or `production`; defaults to `development` | `development`                           |
+| `PORT`            | Production-dependent | HTTP listening port; development default is `5000`                | `5000`                                  |
+| `MONGODB_URI`     | Yes                  | MongoDB connection string used by Mongoose                        | `mongodb://localhost:27017/taskmanager` |
+| `FRONTEND_URL`    | No                   | Single allowed browser origin when `ALLOWED_ORIGINS` is absent    | `http://localhost:3000`                 |
+| `ALLOWED_ORIGINS` | No                   | Comma-separated list that overrides `FRONTEND_URL`                | `http://localhost:3000`                 |
+| `VERCEL`          | Platform-provided    | Disables file logging when set by Vercel                          | `1`                                     |
 
----
+`NODE_ENV`, `PORT`, and `FRONTEND_URL` are validated by envalid. `MONGODB_URI` is checked when the first request triggers a database connection. `ALLOWED_ORIGINS` is split and trimmed at request time.
 
-## API Routes
+## Database Setup
 
-### Tasks
+1. Start a local MongoDB server or provision a remote MongoDB database.
+2. Set `MONGODB_URI` in `backend/.env`.
+3. Start the API and send a request; the router connects to MongoDB before handling it.
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/tasks` | Get all tasks (newest first) |
-| `POST` | `/api/tasks` | Create a task |
-| `PUT` | `/api/tasks/:id` | Update a task |
-| `DELETE` | `/api/tasks/:id` | Delete a task |
+The task schema is defined in `src/api/task/task.model.js`:
 
-**POST / PUT body:**
+| Field         | Type    | Behavior                     |
+| ------------- | ------- | ---------------------------- |
+| `title`       | String  | Required and trimmed         |
+| `description` | String  | Optional and trimmed         |
+| `completed`   | Boolean | Defaults to `false`          |
+| `createdAt`   | Date    | Added by Mongoose timestamps |
+| `updatedAt`   | Date    | Added by Mongoose timestamps |
+
+Tasks are independent documents with no declared relationships. The repository contains no migration or seed framework, files, or package scripts; Mongoose creates the collection when data is first written.
+
+## Running Locally
+
+```bash
+npm run dev
+```
+
+Nodemon watches `src` and `.env`, then executes `node ./src/app.js`. The API listens on `http://localhost:5000` with the example environment.
+
+## Available Scripts
+
+| Command                | Purpose                                      |
+| ---------------------- | -------------------------------------------- |
+| `npm run dev`          | Start the API with Nodemon                   |
+| `npm run start`        | Start the API with Node.js                   |
+| `npm run lint`         | Lint JavaScript files                        |
+| `npm run format`       | Format supported project files with Prettier |
+| `npm run format:check` | Check formatting without writing changes     |
+| `npm test`             | Run the Node.js test runner                  |
+
+## Production Operation
+
+There is no transpilation or production build script. Production runs the JavaScript source directly:
+
+```bash
+npm run start
+```
+
+Set `NODE_ENV=production`, provide `PORT`, `MONGODB_URI`, and the production CORS origin configuration before starting the process.
+
+## API Overview
+
+All endpoints accept and return JSON except endpoints without request bodies.
+
+| Method   | Endpoint                | Description                               | Validation                           |
+| -------- | ----------------------- | ----------------------------------------- | ------------------------------------ |
+| `GET`    | `/`                     | API status response                       | None                                 |
+| `GET`    | `/api/tasks`            | Return all tasks, newest first            | None                                 |
+| `POST`   | `/api/tasks`            | Create a task                             | Create-task Joi schema               |
+| `PUT`    | `/api/tasks/:id`        | Update one or more task fields            | Object ID and update-task Joi schema |
+| `DELETE` | `/api/tasks/:id`        | Delete a task                             | Object ID                            |
+| `GET`    | `/api/github/:username` | Return a normalized public GitHub profile | None                                 |
+
+Create request body:
+
 ```json
 {
-  "title": "Buy groceries",
-  "description": "Milk, eggs, bread",
-  "completed": false
+  "title": "Write documentation",
+  "description": "Update both project READMEs"
 }
 ```
 
-### GitHub
+Update requests accept any non-empty combination of `title`, `description`, and `completed`.
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/github/:username` | Fetch a GitHub user's public profile |
+Successful task and GitHub data responses use this envelope:
 
-**Response:**
 ```json
 {
   "success": true,
-  "data": {
-    "login": "torvalds",
-    "name": "Linus Torvalds",
-    "avatarUrl": "https://avatars.githubusercontent.com/...",
-    "profileUrl": "https://github.com/torvalds",
-    "publicRepos": 8,
-    "followers": 230000,
-    "following": 0
-  }
+  "data": {}
 }
 ```
 
----
+No OpenAPI or Swagger configuration is wired into the application.
 
-## Task Schema
+## Authentication and Authorization
 
-```js
-{
-  title:       String   // required
-  description: String   // optional
-  completed:   Boolean  // default: false
-  createdAt:   Date     // auto
-  updatedAt:   Date     // auto
-}
-```
+The API has no authentication middleware, token/session handling, user model, roles, ownership checks, or protected routes. Every endpoint is public to clients that can reach the service and satisfy its CORS policy. CORS controls browser origins; it is not an authentication mechanism.
 
----
+## Validation
 
-## GitHub API Integration
+- `POST /api/tasks` requires a trimmed, non-empty string `title`; `description` is optional and may be empty.
+- `PUT /api/tasks/:id` requires at least one recognized field. `title` and `description` follow the create rules, and `completed` must be boolean.
+- Joi reports all payload issues in one response because validation uses `abortEarly: false`.
+- Update and delete handlers reject malformed MongoDB object IDs before calling the service layer.
+- Mongoose validators run during updates through `runValidators: true`.
 
-The `/api/github/:username` endpoint proxies requests to `https://api.github.com/users/:username`. By routing through the backend:
+## Error Handling
 
-- CORS is not an issue (browser-to-backend, then backend-to-GitHub)
-- GitHub tokens or rate-limit headers can be added server-side without exposing secrets to the client
-- Error codes (404 user not found, 502 GitHub unavailable) are normalized before the client sees them
+Async failures are forwarded to the final Express error middleware. It logs the response details and returns `status`, `message`, and `stack`; stack traces are included only in development. Unknown routes return HTTP 404 with `Endpoint not found`. Missing tasks return HTTP 404, malformed task IDs return HTTP 400, and GitHub failures are mapped to HTTP 404 or 502.
 
----
+## Logging
 
-## Code Review & Architecture
+- Morgan writes development-style HTTP request logs.
+- Winston logs to the console at `debug` level outside production and `warn` level in production.
+- Production application logs are JSON; development logs are timestamped and colorized.
+- Outside Vercel, Winston also writes errors to `logs/error.log`.
+- When `VERCEL` is set, file logging is disabled and only the console transport is used.
 
-### 1. Securing a Web Application
+## External Services
 
-Input validation is the first line of defense — every endpoint validates the request body with Joi schemas before touching the database. On the auth layer, use JWTs with short expiry and refresh token rotation rather than long-lived sessions. All secrets (DB credentials, API keys) live in environment variables, never in code.
+`GET /api/github/:username` calls `https://api.github.com/users/:username` with GitHub's v3 JSON accept header. It returns the login, display name, avatar URL, profile URL, repository count, follower count, and following count. The integration does not use a GitHub token, so GitHub's unauthenticated rate limits apply.
 
-CORS is locked to the known frontend origin. Helmet sets secure HTTP headers (HSTS, X-Frame-Options, Content-Security-Policy). Express-rate-limit prevents brute-force attacks on sensitive endpoints. Dependencies are kept current with `npm audit` and automated tools like Dependabot.
+## Deployment
 
-In production, TLS terminates at the load balancer or reverse proxy (nginx/Caddy). Logging with Winston captures errors without leaking sensitive data in responses. Monitoring (Datadog, Sentry) catches anomalies in real time.
+`vercel.json` configures `src/app.js` with `@vercel/node` and routes all incoming paths to that entry point. When deploying this repository to Vercel, use `backend` as the project root and configure the production environment variables in the platform.
 
-### 2. How Would You Improve a Slow React Application?
+No Docker, Docker Compose, PM2, reverse-proxy, or CI/CD configuration exists in the backend repository.
 
-Start with profiling: React DevTools Profiler identifies which components re-render unnecessarily. Then apply targeted fixes. `React.memo` prevents re-renders when props haven't changed; `useMemo` and `useCallback` stabilize expensive values and event handlers passed as props.
+## Troubleshooting
 
-Code splitting with `dynamic(() => import('./HeavyComponent'))` reduces the initial bundle. Images use `next/image` with lazy loading and correct `sizes`. API responses are cached — either with React Query's stale-while-revalidate strategy or Next.js `fetch` cache tags.
+### Requests fail before reaching a route
 
-Pagination or virtual scrolling replaces rendering 1,000 items in a single list. Bundle analysis (`next build --analyze`) reveals oversized third-party imports that can be replaced with lighter alternatives. Finally, move to Server Components for data-fetching-heavy views to eliminate client-side waterfalls entirely.
+Every request attempts to connect to MongoDB first. Verify `MONGODB_URI`, database availability, DNS/network access, and any hosted-database allowlist.
 
-### 3. SQL vs NoSQL — When to Use Each
+### The browser reports a CORS error
 
-**SQL (PostgreSQL, MySQL):** Best when data has clear relationships (users → orders → products), integrity is critical (financial transactions, inventory), and complex queries with JOINs are needed. ACID transactions ensure data consistency across multiple tables. Schema enforcement catches data quality problems early. Use SQL when correctness and consistency matter more than flexibility.
+Set `FRONTEND_URL` for one frontend or provide all allowed origins in comma-separated `ALLOWED_ORIGINS`. Origins must match exactly, including protocol and port.
 
-**NoSQL (MongoDB, DynamoDB):** Best when the data shape varies per record (e-commerce product catalog, CMS content), write throughput must scale horizontally, or you're storing documents that are always read together. MongoDB's document model maps naturally to JSON APIs — no ORM impedance mismatch. Use NoSQL when flexibility, horizontal scale, or developer speed are the primary drivers.
+### The server exits during startup
 
-This app uses MongoDB because tasks are self-contained documents with no relational joins required, and the flexible schema lets us add fields later without migrations.
+Check that `NODE_ENV`, `PORT`, and `FRONTEND_URL` satisfy the envalid rules. Production does not receive the development default for `PORT`.
 
-### 4. Deploying a Full-Stack App to AWS
+### GitHub lookup returns HTTP 502
 
-**Frontend (Next.js):** Deploy to Vercel (preferred) or AWS Amplify. Both handle SSR, ISR, and edge functions automatically. Set `NEXT_PUBLIC_API_URL` as an environment variable in the deployment dashboard.
+The GitHub API returned a non-success response other than 404. Check outbound network access and GitHub's unauthenticated rate limit.
 
-**Backend (Express):** Containerize with Docker, push to Amazon ECR, and run on ECS Fargate (serverless containers) or a small EC2 instance. Use an Application Load Balancer to terminate TLS and forward to the container. Store secrets in AWS Secrets Manager or SSM Parameter Store — never in the container image.
+## License
 
-**Database:** MongoDB Atlas on AWS. Free tier covers dev; M10+ for production. Atlas handles replication, backups, and point-in-time recovery. Whitelist only the backend's security group.
-
-**CI/CD:** GitHub Actions pipeline — on push to `main`, run lint + tests, build the Docker image, push to ECR, and trigger an ECS rolling deployment. Frontend deploys automatically via Vercel's GitHub integration.
-
-**Monitoring:** CloudWatch for backend logs and metrics. Sentry for error tracking on both frontend and backend. Set alarms on p95 latency and error rate.
+The backend package metadata declares the ISC license. No separate license file is included in this repository.
