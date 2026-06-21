@@ -3,3 +3,5 @@ logs/
 dist/
 
 .env
+
+.vercel

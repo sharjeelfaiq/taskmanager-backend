@@ -7,15 +7,18 @@ import { applyGlobalMiddleware } from "#middlewares/global.middleware.js";
 
 const app = express();
 
-await connectDatabase();
-applyGlobalMiddleware(app, router);
-app.get("/", (_req, res) => res.json({ status: "OK" }));
+(async function startServer() {
+  await connectDatabase();
+  applyGlobalMiddleware(app, router);
 
-if (!process.env.VERCEL) {
-  const { PORT } = env;
-  app.listen(PORT, () =>
-    logger.info(`Server is running on http://localhost:${PORT}`),
-  );
-}
+  app.get("/", (_req, res) => res.json({ status: "OK" }));
+
+  if (!process.env.VERCEL) {
+    const { PORT } = env;
+    app.listen(PORT, () =>
+      logger.info(`Server is running on http://localhost:${PORT}`),
+    );
+  }
+})();
 
 export default app;
