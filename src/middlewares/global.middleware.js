@@ -4,6 +4,7 @@ import express from "express";
 
 import { env } from "#config/env.config.js";
 import { logger } from "#lib/logger.lib.js";
+import { connectDatabase } from "#lib/database.lib.js";
 
 const { NODE_ENV, FRONTEND_URL } = env;
 
@@ -43,7 +44,9 @@ const invalidPromiseHandler = (req, res) => {
   res.status(404).json({ message: "Endpoint not found" });
 };
 
-const applyGlobalMiddleware = (app, router) => {
+const applyGlobalMiddleware = async (app, router) => {
+  await connectDatabase();
+
   app.use(morgan("dev"));
   app.use(cors(corsOptions));
   app.use(express.json());
