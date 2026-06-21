@@ -8,8 +8,8 @@ import { applyGlobalMiddleware } from "#middlewares/global.middleware.js";
 const app = express();
 
 (async function startServer() {
-  await connectDatabase();
   applyGlobalMiddleware(app, router);
+  await connectDatabase();
 
   app.get("/", (_req, res) => res.json({ status: "OK" }));
 
