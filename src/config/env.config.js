@@ -12,8 +12,10 @@ const validators = {
 
   PORT: port({ devDefault: 5000 }),
 
-  MONGODB_URI: str({ desc: "MongoDB connection string" }),
-  FRONTEND_URL: url({ desc: "Frontend URL" }),
+  FRONTEND_URL: url({
+    default: "http://localhost:3000",
+    desc: "Frontend URL",
+  }),
 };
 
 export const env = cleanEnv(process.env, validators, {
