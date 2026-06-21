@@ -6,18 +6,18 @@ import { connectDatabase } from "#lib/database.lib.js";
 import { applyGlobalMiddleware } from "#middlewares/global.middleware.js";
 
 const app = express();
+const { PORT } = env;
 
-applyGlobalMiddleware(app, router);
-await connectDatabase();
+app.listen(PORT, () =>
+  logger.info(`Server is running on http://localhost:${PORT}`),
+);
 
 app.get("/", (_req, res) => res.json({ status: "OK" }));
 
-if (!process.env.VERCEL) {
-  const { PORT } = env;
-  app.listen(PORT, () =>
-    logger.info(`Server is running on http://localhost:${PORT}`),
-  );
-}
+applyGlobalMiddleware(app, router);
+
+await connectDatabase();
+
 // (async function startServer() {
 // })();
 
