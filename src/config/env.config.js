@@ -21,12 +21,9 @@ export const env = cleanEnv(process.env, validators, {
     const invalidVars = Object.keys(errors);
 
     if (invalidVars.length) {
-      process.stderr.write(
-        `Invalid environment variables:\n\n- ${invalidVars.join(
-          "\n- ",
-        )}\n\nFix them in your .env file.\n`,
+      throw new Error(
+        `Invalid environment variables: ${invalidVars.join(", ")}`,
       );
-      process.exit(1);
     }
   },
 });

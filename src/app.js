@@ -7,9 +7,16 @@ import { applyGlobalMiddleware } from "#middlewares/global.middleware.js";
 
 const app = express();
 
-await connectDatabase();
+app.use(async (_req, _res, next) => {
+  try {
+    await connectDatabase();
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
+
 applyGlobalMiddleware(app, router);
-app.get("/", (_req, res) => res.json({ status: "OK" }));
 
 if (!process.env.VERCEL) {
   const { PORT } = env;
