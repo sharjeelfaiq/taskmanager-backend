@@ -250,6 +250,30 @@ Check that `NODE_ENV`, `PORT`, and `FRONTEND_URL` satisfy the envalid rules. Pro
 
 The GitHub API returned a non-success response other than 404. Check outbound network access and GitHub's unauthenticated rate limit.
 
-## License
+## Technical Questions
 
-The backend package metadata declares the ISC license. No separate license file is included in this repository.
+### What steps would you take to secure a web application?
+
+Start with a threat model covering users, sensitive data, trust boundaries, and likely abuse cases. Validate and normalize all untrusted input on the server, encode output, use parameterized database operations, and enforce authentication and least-privilege authorization at every protected resource. Store passwords with a modern password hash and keep sessions or tokens short-lived, revocable, and protected by secure, `HttpOnly`, `SameSite` cookies where appropriate.
+
+Require HTTPS, configure restrictive CORS and security headers, protect state-changing requests from CSRF, rate-limit abuse-prone endpoints, and cap request and upload sizes. Keep secrets outside source control and rotate them through a managed secret store. Patch dependencies, lock versions, and scan code, dependencies, and infrastructure in CI. Log security-relevant events without recording credentials or tokens, monitor anomalies, back up data, test restoration, and maintain an incident-response process. Add automated authorization, validation, and abuse-case tests, then perform periodic security reviews and penetration testing.
+
+### How would you improve the performance of a slow React application?
+
+Measure before changing code. Use React DevTools Profiler, browser performance traces, Core Web Vitals, and bundle analysis to identify whether the bottleneck is rendering, JavaScript size, networking, images, or the backend. Remove unnecessary state and effects, colocate state, use stable keys, and prevent expensive rerenders with component boundaries and targeted `memo`, `useMemo`, or `useCallback` only when profiling justifies them.
+
+Split large routes and components, lazy-load noncritical code, remove oversized dependencies, optimize images and fonts, and avoid shipping server-only work to the browser. Cache and deduplicate requests, paginate or virtualize large lists, debounce high-frequency input, and use optimistic updates where appropriate. In Next.js, choose Server Components, streaming, static generation, or dynamic rendering based on data freshness requirements. Also inspect API latency and database queries, because frontend optimization cannot compensate for a slow data source. Re-profile after each change and compare production metrics against a baseline.
+
+### Explain the difference between SQL and NoSQL databases and when you would use each.
+
+SQL databases such as PostgreSQL and MySQL store data in tables with defined schemas and relationships. They support joins, constraints, transactions, and expressive queries. Use SQL when data integrity, relational modeling, multi-record transactions, reporting, and predictable query patterns are central—for example payments, inventory, or order management.
+
+NoSQL describes several non-relational models, including document, key-value, wide-column, and graph databases. They often favor flexible data shapes, access-pattern-specific modeling, and straightforward horizontal scaling. Use a document database such as MongoDB when records are naturally self-contained JSON-like documents and the schema changes frequently; use key-value storage for sessions or caching, and graph storage for relationship-heavy traversal.
+
+The choice is not simply scale versus no scale: both categories can scale and provide consistency. Decide from data relationships, transaction boundaries, query patterns, consistency requirements, operational expertise, and expected growth. Polyglot persistence is reasonable when separate workloads have genuinely different needs.
+
+### How would you deploy a full-stack application to AWS, Azure, or Google Cloud?
+
+First define separate build artifacts for the frontend and API, then provision infrastructure with Terraform or the cloud's native infrastructure-as-code service. Build immutable container images in CI, scan them, publish them to ECR, ACR, or Artifact Registry, and deploy the API to ECS/Fargate, Azure Container Apps, or Cloud Run. Deploy a static frontend through object storage and a CDN when possible; use a managed container or application platform when server-side rendering is required.
+
+Use a managed database with private networking, encryption, automated backups, and tested restoration. Store secrets in Secrets Manager, Key Vault, or Secret Manager; grant workloads short-lived identities and least-privilege IAM roles. Put public traffic behind managed TLS, a load balancer or API gateway, a CDN, and optional WAF protection. Configure environment-specific domains, CORS, health checks, autoscaling, centralized logs, metrics, traces, and alerts. Run migrations as a controlled release step and use rolling, blue-green, or canary deployments with automatic rollback. Validate the complete production flow after deployment and document recovery procedures.
